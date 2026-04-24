@@ -17,7 +17,19 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
-const app = Fastify({ logger: true });
+const app = Fastify({ 
+    logger: {
+        transport: {
+            target: 'pino-pretty',
+            options: {
+                translateTime: 'HH:MM:ss Z',
+                ignore: 'pid,hostname',
+                colorize: true,
+            },
+        },
+    },
+    disableRequestLogging: true // Desativamos o padrão para fazer um mais bonito
+});
 
 // --- CONFIGURAÇÃO DO CLIENTE MCP ---
 let mcpClient = null;
@@ -67,8 +79,28 @@ const start = async () => {
 
         await app.register(swaggerUi, { routePrefix: '/docs' });
 
-        // --- TRAVA DE SEGURANÇA GLOBAL ---
+        // --- HOOKS DE LOGGING CUSTOMIZADOS ---
+        app.addHook('onRequest', async (request, reply) => {
+            const start = Date.now();
+            request.startTime = start;
+            app.log.info({ 
+                ip: request.ip, 
+                method: request.method, 
+                url: request.url 
+            }, `📥 Chegada: ${request.method} ${request.url}`);
+        });
+
         app.addHook('preHandler', async (request, reply) => {
+            // Tenta extrair perfil do body se existir
+            if (request.body) {
+                const { nivel, stack, perfil } = request.body;
+                if (nivel || stack || perfil) {
+                    const infoPerfil = perfil || { nivel, stack };
+                    app.log.info({ perfil: infoPerfil }, `👤 Contexto do Usuário`);
+                }
+            }
+
+            // --- TRAVA DE SEGURANÇA GLOBAL ---
             // Permite requisições de documentação e preflight do CORS (sem auth)
             if (request.url.startsWith('/docs')) return;
             if (request.method === 'OPTIONS') return;
@@ -85,6 +117,15 @@ const start = async () => {
             if (!authHeader || authHeader !== tokenEsperado) {
                 return reply.status(401).send({ erro: "Acesso Negado: Token ausente ou inválido." });
             }
+        });
+
+        app.addHook('onResponse', async (request, reply) => {
+            const duration = Date.now() - request.startTime;
+            const statusEmoji = reply.statusCode >= 400 ? '❌' : '✅';
+            app.log.info({ 
+                statusCode: reply.statusCode, 
+                duration: `${duration}ms` 
+            }, `${statusEmoji} Resposta: ${reply.statusCode} (${duration}ms)`);
         });
 
         // --- ROTAS PADRÃO ---
@@ -540,10 +581,15 @@ const start = async () => {
         const host = '0.0.0.0'; // Necessário para deploy (Render/Fly.io)
 
         await app.listen({ port, host });
-        console.log(`🚀 API Online e conectada ao PostgreSQL!`);
-        console.log(`📖 Porta: ${port}`);
-        console.log(`🌍 Host: ${host}`);
-        console.log(`📄 Documentação: http://localhost:${port}/docs`);
+        
+        console.log("\n" + "=".repeat(50));
+        console.log(`🚀 TECH TENDENCE API - ONLINE`);
+        console.log("=".repeat(50));
+        console.log(`📡 Porta:   ${port}`);
+        console.log(`🌐 Host:    ${host}`);
+        console.log(`📖 Docs:    http://localhost:${port}/docs`);
+        console.log(`🛡️  Auth:    ${process.env.API_SECRET_TOKEN ? 'Ativada' : 'Desativada (⚠️)'}`);
+        console.log("=".repeat(50) + "\n");
 
     } catch (err) {
         app.log.error(err);
