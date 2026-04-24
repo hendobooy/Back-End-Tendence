@@ -92,48 +92,52 @@ const start = async () => {
         });
 
         app.addHook('preHandler', async (request, reply) => {
-            // Tenta extrair dados úteis do body
-            if (request.body) {
-                const { nivel, stack, perfil, mensagens, tecnologias } = request.body;
-                
-                // 1. Log de Perfil Simplificado
-                const p = perfil || { nivel, stack };
-                if (p.nivel || p.stack) {
-                    app.log.info(`👤 Perfil: ${p.nivel || 'N/A'} | ${p.stack || 'N/A'}`);
-                }
-
-                // 2. Log da Mensagem do Usuário (se for chat)
-                if (Array.isArray(mensagens) && mensagens.length > 0) {
-                    const lastMsg = mensagens[mensagens.length - 1];
-                    if (lastMsg.role === 'user' && lastMsg.content) {
-                        app.log.info(`💬 Mensagem: "${lastMsg.content.substring(0, 100)}${lastMsg.content.length > 100 ? '...' : ''}"`);
-                    }
-                }
-
-                // 3. Log de Tecnologias (Hardskills) e Níveis
-                const hardskills = tecnologias || perfil?.tecnologias;
-                if (Array.isArray(hardskills) && hardskills.length > 0) {
-                    const techsStr = hardskills.map(t => `${t.tecnologia || t.nome || 'Tech'} (${t.nivel || '?'})`).join(', ');
-                    app.log.info(`🛠️  Hardskills: ${techsStr}`);
-                }
-            }
-
-            // --- TRAVA DE SEGURANÇA GLOBAL ---
-            // Permite requisições de documentação e preflight do CORS (sem auth)
+            // --- TRAVA DE SEGURANÇA GLOBAL (PRIMEIRO, antes de qualquer coisa) ---
             if (request.url.startsWith('/docs')) return;
             if (request.method === 'OPTIONS') return;
 
-            // Se a variável de ambiente não estiver definida, ignora a autenticação
             if (!process.env.API_SECRET_TOKEN) {
                 app.log.warn('⚠️ API_SECRET_TOKEN não definido — autenticação desabilitada.');
-                return;
+            } else {
+                const authHeader = request.headers.authorization;
+                const tokenEsperado = `Bearer ${process.env.API_SECRET_TOKEN}`;
+                if (!authHeader || authHeader !== tokenEsperado) {
+                    return reply.status(401).send({ erro: "Acesso Negado: Token ausente ou inválido." });
+                }
             }
 
-            const authHeader = request.headers.authorization;
-            const tokenEsperado = `Bearer ${process.env.API_SECRET_TOKEN}`;
+            // --- LOGS DE CONTEXTO (em bloco isolado, nunca quebra a aplicação) ---
+            try {
+                if (request.body && typeof request.body === 'object') {
+                    const { nivel, stack, perfil, mensagens, tecnologias } = request.body;
 
-            if (!authHeader || authHeader !== tokenEsperado) {
-                return reply.status(401).send({ erro: "Acesso Negado: Token ausente ou inválido." });
+                    // 1. Perfil resumido
+                    const p = perfil || { nivel, stack };
+                    if (p.nivel || p.stack) {
+                        app.log.info(`👤 Perfil: ${p.nivel || 'N/A'} | ${p.stack || 'N/A'}`);
+                    }
+
+                    // 2. Última mensagem do usuário (chat)
+                    if (Array.isArray(mensagens) && mensagens.length > 0) {
+                        const lastMsg = mensagens[mensagens.length - 1];
+                        if (lastMsg?.role === 'user' && lastMsg?.content) {
+                            const msg = String(lastMsg.content);
+                            app.log.info(`💬 Mensagem: "${msg.substring(0, 100)}${msg.length > 100 ? '...' : ''}"`);
+                        }
+                    }
+
+                    // 3. Hardskills e níveis
+                    const hardskills = tecnologias || perfil?.tecnologias;
+                    if (Array.isArray(hardskills) && hardskills.length > 0) {
+                        const techsStr = hardskills
+                            .map(t => `${t?.tecnologia || t?.nome || 'Tech'} (${t?.nivel || '?'})`)
+                            .join(', ');
+                        app.log.info(`🛠️  Hardskills: ${techsStr}`);
+                    }
+                }
+            } catch (logErr) {
+                // Nunca deixa o log quebrar a aplicação
+                app.log.warn(`⚠️ Falha ao logar contexto da requisição: ${logErr.message}`);
             }
         });
 
