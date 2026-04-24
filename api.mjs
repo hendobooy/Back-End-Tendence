@@ -91,12 +91,22 @@ const start = async () => {
         });
 
         app.addHook('preHandler', async (request, reply) => {
-            // Tenta extrair perfil do body se existir
+            // Tenta extrair dados úteis do body
             if (request.body) {
-                const { nivel, stack, perfil } = request.body;
-                if (nivel || stack || perfil) {
-                    const infoPerfil = perfil || { nivel, stack };
-                    app.log.info({ perfil: infoPerfil }, `👤 Contexto do Usuário`);
+                const { nivel, stack, perfil, mensagens } = request.body;
+                
+                // 1. Log de Perfil Simplificado (evita poluição com objetos grandes)
+                const p = perfil || { nivel, stack };
+                if (p.nivel || p.stack) {
+                    app.log.info(`👤 Perfil: ${p.nivel || 'N/A'} | ${p.stack || 'N/A'}`);
+                }
+
+                // 2. Log da Mensagem do Usuário (se for chat)
+                if (Array.isArray(mensagens) && mensagens.length > 0) {
+                    const lastMsg = mensagens[mensagens.length - 1];
+                    if (lastMsg.role === 'user' && lastMsg.content) {
+                        app.log.info(`💬 Mensagem: "${lastMsg.content.substring(0, 100)}${lastMsg.content.length > 100 ? '...' : ''}"`);
+                    }
                 }
             }
 
