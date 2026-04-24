@@ -138,12 +138,12 @@ const start = async () => {
         });
 
         app.addHook('onResponse', async (request, reply) => {
-            const duration = Date.now() - request.startTime;
+            const duration = request.startTime ? `${Date.now() - request.startTime}ms` : 'N/A';
             const statusEmoji = reply.statusCode >= 400 ? '❌' : '✅';
             app.log.info({ 
                 statusCode: reply.statusCode, 
-                duration: `${duration}ms` 
-            }, `${statusEmoji} Resposta: ${reply.statusCode} (${duration}ms)`);
+                duration 
+            }, `${statusEmoji} Resposta: ${reply.statusCode} (${duration})`);
         });
 
         // --- ROTAS PADRÃO ---
@@ -205,12 +205,16 @@ const start = async () => {
             try {
                 const { nivel, stack, tecnologias, objetivo, area_migracao } = request.body;
 
+                app.log.info("🔌 Conectando ao cliente MCP...");
                 const client = await iniciarMcpClient();
+                
+                app.log.info("🛠️  Listando ferramentas MCP...");
                 const mcpToolsResult = await client.listTools();
                 const openaiTools = mcpToolsResult.tools.map(t => ({
                     type: "function",
                     function: { name: t.name, description: t.description, parameters: t.inputSchema }
                 }));
+                app.log.info(`✅ MCP pronto com ${openaiTools.length} ferramentas.`);
 
                 const cargoAlvo = objetivo === "Migrar de área" && area_migracao ? area_migracao : (stack === "Dados" ? "Dados" : stack);
                 const techsUsuario = tecnologias && tecnologias.length > 0 ? tecnologias.map(t => `${t.tecnologia} (${t.nivel})`).join(', ') : "Nenhuma informada";
@@ -218,6 +222,7 @@ const start = async () => {
                 // ==========================================
                 // PRÉ-FASE 1: Consulta o catálogo real do banco para restringir a seleção da IA
                 // ==========================================
+                app.log.info("🗄️  Consultando catálogo de tecnologias no banco...");
                 const resTechs = await db.query('SELECT DISTINCT tecnologia FROM cursos ORDER BY tecnologia');
                 const techsNoBanco = resTechs.rows;
                 const catalogoTecnologias = techsNoBanco.map(r => r.tecnologia).join(', ');
@@ -436,8 +441,8 @@ const start = async () => {
                 return reply.send(resultadoFinal);
 
             } catch (error) {
-                app.log.error(error);
-                return reply.status(500).send({ erro: "Falha ao gerar insights orquestrados via MCP" });
+                app.log.error({ err: error.message, stack: error.stack }, "❌ Erro em /api/gerar-insights");
+                return reply.status(500).send({ erro: "Falha ao gerar insights orquestrados via MCP", detalhes: error.message });
             }
         });
 
@@ -589,8 +594,8 @@ const start = async () => {
                 return reply.send({ resposta: respostaFinal });
 
             } catch (error) {
-                app.log.error(error);
-                return reply.status(500).send({ erro: "Falha na comunicação com o chat" });
+                app.log.error({ err: error.message, stack: error.stack }, "❌ Erro em /api/chat-ia");
+                return reply.status(500).send({ erro: "Falha na comunicação com o chat", detalhes: error.message });
             }
         });
 
