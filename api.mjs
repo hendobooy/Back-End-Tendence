@@ -141,6 +141,22 @@ const start = async () => {
             }
         });
 
+        app.addHook('onSend', async (request, reply, payload) => {
+            // Log da Resposta da IA (apenas para o chat e se for sucesso)
+            if (request.url.startsWith('/api/chat-ia') && reply.statusCode === 200) {
+                try {
+                    const body = JSON.parse(payload);
+                    if (body.resposta) {
+                        const resp = String(body.resposta);
+                        app.log.info(`🤖 IA: "${resp.substring(0, 100)}${resp.length > 100 ? '...' : ''}"`);
+                    }
+                } catch (err) {
+                    // Falha silenciosa no log para não quebrar a resposta real
+                }
+            }
+            return payload;
+        });
+
         app.addHook('onResponse', async (request, reply) => {
             const duration = request.startTime ? `${Date.now() - request.startTime}ms` : 'N/A';
             const statusEmoji = reply.statusCode >= 400 ? '❌' : '✅';
