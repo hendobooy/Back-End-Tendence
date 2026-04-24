@@ -41,7 +41,8 @@ async function iniciarMcpClient() {
 
     const transport = new StdioClientTransport({
         command: "node",
-        args: [mcpServerPath]
+        args: [mcpServerPath],
+        env: process.env // Garante que as variáveis de ambiente (DATABASE_URL, etc.) sejam passadas
     });
 
     mcpClient = new Client({ name: "fastify-mcp-client", version: "1.0.0" }, { capabilities: {} });
@@ -107,6 +108,13 @@ const start = async () => {
                     if (lastMsg.role === 'user' && lastMsg.content) {
                         app.log.info(`💬 Mensagem: "${lastMsg.content.substring(0, 100)}${lastMsg.content.length > 100 ? '...' : ''}"`);
                     }
+                }
+
+                // 3. Log de Tecnologias (Hardskills) e Níveis
+                const techs = tecnologias || perfil?.tecnologias;
+                if (Array.isArray(techs) && techs.length > 0) {
+                    const techsStr = techs.map(t => `${t.tecnologia || t.nome} (${t.nivel})`).join(', ');
+                    app.log.info(`🛠️  Hardskills: ${techsStr}`);
                 }
             }
 
