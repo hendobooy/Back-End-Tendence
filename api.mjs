@@ -94,9 +94,9 @@ const start = async () => {
         app.addHook('preHandler', async (request, reply) => {
             // Tenta extrair dados úteis do body
             if (request.body) {
-                const { nivel, stack, perfil, mensagens } = request.body;
+                const { nivel, stack, perfil, mensagens, tecnologias } = request.body;
                 
-                // 1. Log de Perfil Simplificado (evita poluição com objetos grandes)
+                // 1. Log de Perfil Simplificado
                 const p = perfil || { nivel, stack };
                 if (p.nivel || p.stack) {
                     app.log.info(`👤 Perfil: ${p.nivel || 'N/A'} | ${p.stack || 'N/A'}`);
@@ -111,9 +111,9 @@ const start = async () => {
                 }
 
                 // 3. Log de Tecnologias (Hardskills) e Níveis
-                const techs = tecnologias || perfil?.tecnologias;
-                if (Array.isArray(techs) && techs.length > 0) {
-                    const techsStr = techs.map(t => `${t.tecnologia || t.nome} (${t.nivel})`).join(', ');
+                const hardskills = tecnologias || perfil?.tecnologias;
+                if (Array.isArray(hardskills) && hardskills.length > 0) {
+                    const techsStr = hardskills.map(t => `${t.tecnologia || t.nome || 'Tech'} (${t.nivel || '?'})`).join(', ');
                     app.log.info(`🛠️  Hardskills: ${techsStr}`);
                 }
             }
@@ -144,6 +144,15 @@ const start = async () => {
                 statusCode: reply.statusCode, 
                 duration 
             }, `${statusEmoji} Resposta: ${reply.statusCode} (${duration})`);
+        });
+
+        app.addHook('onError', async (request, reply, error) => {
+            app.log.error({ 
+                err: error.message, 
+                stack: error.stack,
+                url: request.url,
+                method: request.method 
+            }, "💥 Erro Crítico não tratado");
         });
 
         // --- ROTAS PADRÃO ---
