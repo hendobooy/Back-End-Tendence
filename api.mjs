@@ -536,9 +536,14 @@ const start = async () => {
         });
 
         // 3. Inicializa o servidor
-        await app.listen({ port: 3001 });
-        console.log('🚀 API Online e conectada ao PostgreSQL!');
-        console.log('📖 Documentação: http://localhost:3001/docs');
+        const port = process.env.PORT || 3001;
+        const host = '0.0.0.0'; // Necessário para deploy (Render/Fly.io)
+
+        await app.listen({ port, host });
+        console.log(`🚀 API Online e conectada ao PostgreSQL!`);
+        console.log(`📖 Porta: ${port}`);
+        console.log(`🌍 Host: ${host}`);
+        console.log(`📄 Documentação: http://localhost:${port}/docs`);
 
     } catch (err) {
         app.log.error(err);
